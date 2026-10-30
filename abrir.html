@@ -16,46 +16,50 @@
 
   Por que el fragmento (#) y no la consulta (?): el navegador NUNCA envia el
   fragmento al servidor. El alojamiento no ve el vale, no lo registra y no
-  puede registrarlo.
+  puede registrarlo. La consulta se compara ENTERA contra una lista cerrada
+  de cadenas exactas (ver CONSULTAS): ninguna de las admitidas lleva un vale,
+  asi que un vale no puede viajar en la consulta ni por descuido.
 
-  La consulta se compara ENTERA contra una lista cerrada de cadenas exactas
-  (ver CONSULTAS). No se parsea y no se leen parametros. De ahi sale la
-  garantia que importa: ninguna de las cadenas admitidas lleva un vale, asi
-  que un vale sigue sin poder viajar en la consulta ni por descuido ni a
-  proposito.
-
-  Lo que esta pagina no tiene y no puede tener: ni identificadores de
-  elementos, ni titulos, ni rutas de ficheros, ni sesion, ni puerto, ni
-  nombres del proyecto. No carga nada de fuera -- ni tipografias, ni guiones,
-  ni analitica -- asi que no hay forma de que informe a nadie de nada.
-
-  Lo que un vale puede hacer en el ordenador de su duenyo: decidir QUE ficha
-  se abre. No aprueba, no rechaza, no genera y no enciende la tarjeta
-  grafica. En cualquier otro ordenador no hace nada: no hay programa
-  registrado y no hay cuaderno donde buscarlo.
+  Esta pagina no tiene identificadores de elementos, ni titulos, ni rutas, ni
+  sesion, ni puerto, ni nombres del proyecto. No carga nada de fuera y no
+  guarda nada. Un vale solo decide QUE ficha se abre: no aprueba, no rechaza,
+  no genera y no enciende la tarjeta grafica.
 
   ---------------------------------------------------------------------------
-  SOBRE EL CIERRE AUTOMATICO, que es lo que cambia en esta version.
+  POR QUE CAMBIA EL MINIMO, que es la correccion de esta version.
 
-  La version anterior dictaba un veredicto a los 1500 ms -- «parece
-  bloqueado» -- y se equivocaba casi siempre. Medido el 30 de octubre de 2026
-  en el ordenador del duenyo: el lanzador tarda 1820, 3647 y 4127 ms solo en
-  importar su paquete, y a eso le suma todavia 0,4 s antes de abrir el
-  navegador. El umbral estaba por debajo de la medicion mas rapida, asi que
-  el veredicto se dictaba mientras el lanzamiento seguia en vuelo. Ese
-  diagnostico era un instrumento de medida para una prueba concreta y aqui no
-  tenia nada que hacer: se ha ido entero.
+  La version anterior exigia 1500 ms entre el lanzamiento y el cierre. Medido
+  en el ordenador del duenyo el 30 de octubre de 2026:
 
-  En su lugar, el cierre se dispara por VISIBILIDAD y no por tiempo. La razon
-  es exacta: la ventana con la que Chrome pregunta si quieres abrir la
-  aplicacion cambia el FOCO pero NO la visibilidad de la pagina. Asi que
-  mientras tu decides, `document.hidden` sigue siendo false y esta pagina no
-  se cierra -- no porque haya esperado lo suficiente, sino porque no se ha
-  cumplido la condicion. Cuando la ficha de Maestro aparece y toma el primer
-  plano, esta pagina pasa a oculta, y es justo ahi cuando sobra.
+      en frio     1820, 3647, 4127 ms
+      EN CALIENTE  983, 791, 862, 987, 835, 928 ms   (media 897)
 
-  No hay ningun temporizador en todo el fichero. El arreglo de un fallo
-  causado por un temporizador no se hace con otro temporizador.
+  Y el caso real es el caliente: cuando la pantalla local ya esta abierta de
+  un clic anterior, el lanzador no la levanta -- la reutiliza -- y llama al
+  navegador inmediatamente despues de importar. Asi que el unico
+  `visibilitychange` que llega lo hace sobre 1,0-1,2 s, POR DEBAJO del minimo,
+  y el minimo lo descartaba. La pestanya se quedaba abierta hasta que el
+  duenyo cambiaba de ventana a mano, lo que producia un SEGUNDO evento ya
+  pasado el minimo: entonces si se cerraba. Eso es exactamente lo que se
+  observo.
+
+  El minimo baja a 250 ms, que sigue dejando un margen de mas del triple
+  sobre la medicion mas rapida. Y no hace falta mas suelo que ese, porque lo
+  que de verdad protege la confirmacion de Chrome es otra cosa:
+
+  LA CONDICION DE OCULTA. La ventana con la que Chrome pregunta si abrir la
+  aplicacion cambia el FOCO pero NO la visibilidad de la pagina. Mientras esa
+  ventana esta delante, `document.hidden` es false y aqui no se cierra nada.
+  No es una espera: es que la condicion no se cumple. Por eso este fichero no
+  usa `blur` en ninguna parte -- `blur` SI se dispara con esa ventana, y
+  tomarlo por «Maestro se abrio» cerraria la pestanya antes de que el duenyo
+  confirme.
+
+  El techo sube a 10 minutos. Con el anterior de 2 minutos, un arranque en
+  frio mas una confirmacion que el duenyo tarde en atender se salia de plazo.
+
+  No hay ningun temporizador en todo el fichero, y no hay ningun veredicto:
+  la pagina dice lo que ha pasado, nunca adivina lo que no sabe.
   ============================================================================
 -->
 <style>
@@ -65,13 +69,16 @@
  html,body{margin:0;background:var(--f);color:var(--c)}
  body{font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
       display:grid;place-items:center;min-height:100vh;padding:16px}
- main{max-width:30em;width:100%;text-align:center}
+ main{max-width:32em;width:100%;text-align:center}
  h1{font-size:1.25em;margin:0 0 .2em}
  p{margin:.5em 0}
  .g{color:var(--g);font-size:.9em}
- a.b{display:inline-block;margin-top:1em;background:var(--a);color:#fff;
-      border:0;border-radius:8px;padding:.7em 1.3em;font:inherit;
+ a.b,button.b{display:inline-block;margin:1em .3em 0;background:var(--a);
+      color:#fff;border:0;border-radius:8px;padding:.7em 1.3em;font:inherit;
       text-decoration:none;cursor:pointer}
+ button.s{background:transparent;color:var(--g);border:1px solid var(--t)}
+ #e{margin-top:1.8em;font-size:.8em;color:var(--g);text-align:left;
+      border-top:1px solid var(--t);padding-top:.7em;white-space:pre-line}
  code{background:var(--p);border:1px solid var(--t);padding:.1em .4em;
       border-radius:4px;font-size:.9em;word-break:break-all}
 </style>
@@ -80,7 +87,11 @@
 <main>
  <h1 id="t">Abriendo Maestro AI Studio&hellip;</h1>
  <p class="g" id="s">Si tu navegador pregunta si quieres abrirlo, di que s&iacute;.</p>
- <p><a class="b" id="m" href="#" hidden>Abrirlo ahora</a></p>
+ <p>
+   <a class="b" id="m" href="#" hidden>Abrirlo ahora</a>
+   <button class="b s" id="x" hidden>Cerrar esta pesta&ntilde;a</button>
+ </p>
+ <div id="e" hidden></div>
 </main>
 <script>
 "use strict";
@@ -93,13 +104,8 @@ var VALE = /^[0-9a-f]{32}$/;
 
 // Consultas admitidas, comparadas ENTERAS y letra por letra. No se parsea la
 // consulta y no se leen parametros: se compara la cadena completa. Por eso un
-// duplicado (`utm_source=chatgpt.com&utm_source=chatgpt.com`), un parametro de
-// propina, otro valor u otra grafia no son «lo mismo con algo mas»: son otra
-// cadena, y no estan en la lista.
-//
-// `?utm_source=chatgpt.com` esta aqui porque ChatGPT lo anyade al abrir el
-// enlace. Si manyana anyade otra etiqueta, se escribe otra linea en esta
-// lista y no hay nada mas que tocar.
+// duplicado, un parametro de propina, otro valor u otra grafia no son «lo
+// mismo con algo mas»: son otra cadena, y no estan en la lista.
 var CONSULTAS = ["", "?utm_source=chatgpt.com"];
 
 function decidir(busqueda, fragmento) {
@@ -127,74 +133,121 @@ function decidir(busqueda, fragmento) {
 /* ---8<--- DECISION: FIN ------------------------------------------------- */
 
 /* ---8<--- CIERRE: INICIO --- tambien se prueba palabra por palabra ------ */
-// Ni demasiado pronto ni para siempre.
+// 250 ms: mas del triple de margen por debajo de los 791 ms mas rapidos que
+// se han medido en el lanzador. Solo esta para absorber un parpadeo
+// instantaneo; lo que protege la ventana de confirmacion es `oculto`.
 //
-// MINIMO: si la pagina se oculta en el primer instante no es porque Maestro
-// haya abierto nada -- el lanzador tarda segundos -- sino porque has cambiado
-// de pestanya a mano. Cerrar ahi podria llevarse por delante un lanzamiento
-// todavia en vuelo, asi que no se cierra; se cerrara la siguiente vez que
-// esta pagina se oculte.
-//
-// MAXIMO: pasado un rato, esta pestanya ya no es «la que acaba de abrir
-// Maestro» sino una pestanya mas que tienes ahi. Que se cierre sola media
-// hora despues, cuando mires otra cosa, seria desconcertante.
-var MINIMO = 1500, MAXIMO = 120000;
+// 600000 ms: diez minutos. El techo anterior de dos minutos descartaba el
+// caso de un arranque en frio mas una confirmacion que tarde en atenderse.
+var MINIMO = 250, MAXIMO = 600000;
 
 function debe_cerrar(oculto, lanzado, cerrado, desde_el_lanzamiento) {
-  // Ojo con el orden de las condiciones: `oculto` es la primera a proposito.
-  // La ventana con la que Chrome pregunta si abrir la aplicacion cambia el
-  // FOCO pero no la VISIBILIDAD, asi que mientras esa ventana esta delante
-  // esto devuelve false y la pestanya no se cierra. Eso no es una espera: es
-  // que la condicion no se cumple.
+  // El orden importa. `oculto` es lo primero a proposito: la ventana con la
+  // que Chrome pregunta si abrir la aplicacion cambia el foco pero NO la
+  // visibilidad, asi que mientras esta delante esto devuelve false.
   if (!oculto) { return false; }
-  if (!lanzado) { return false; }          // nada que acompanyar todavia
-  if (cerrado) { return false; }           // una sola vez, nunca en bucle
+  if (!lanzado) { return false; }           // nada que acompanyar todavia
+  if (cerrado) { return false; }            // una sola vez, nunca en bucle
   if (desde_el_lanzamiento < MINIMO) { return false; }
   if (desde_el_lanzamiento > MAXIMO) { return false; }
   return true;
 }
+
+// El mismo oyente se registra en `document` -- que es donde la especificacion
+// dice que se dispara el evento -- y en `window`, por si algun navegador no
+// lo hace burbujear. Eso significa que el mismo cambio puede llegar DOS
+// veces, asi que se descarta el duplicado por su marca de tiempo. Sin esto,
+// el registro de abajo contaria cada cambio dos veces y mentiria.
+function repetido(marca, ultima) {
+  return ultima !== null && marca === ultima;
+}
 /* ---8<--- CIERRE: FIN --------------------------------------------------- */
 
 var t = document.getElementById("t"), s = document.getElementById("s"),
-    m = document.getElementById("m");
+    m = document.getElementById("m"), x = document.getElementById("x"),
+    e = document.getElementById("e");
+
+function estado(titulo, subtitulo) {
+  t.textContent = titulo;
+  s.innerHTML = subtitulo;
+  // El rotulo de la pestanya tambien, que en la version anterior se quedaba
+  // siempre en «Abriendo...» y hacia imposible saber que habia pasado sin
+  // abrir la consola.
+  document.title = titulo;
+}
+
+// Registro de lo que de verdad ha ocurrido. No es un veredicto y no adivina
+// nada: son los cambios de visibilidad con su instante. Si algun dia la
+// pestanya no se cierra, esto dice por que de un vistazo.
+var diario = [];
+function apunta(linea) {
+  diario.push(linea);
+  e.hidden = false;
+  e.textContent = "Detalle técnico:\n" + diario.join("\n");
+}
 
 var d = decidir(location.search, location.hash);
 
 if (!d.ok) {
-  t.textContent = d.titulo;
-  s.innerHTML = d.detalle;
+  estado(d.titulo, d.detalle);
+  x.hidden = false;
 } else {
-  // El boton de respaldo es un enlace de verdad, no un guión: pulsarlo es un
-  // gesto tuyo y vale siempre, tambien si el salto automatico se quedo corto.
-  // Al ser un enlace y no JavaScript, no puede provocar un lanzamiento doble
-  // por su cuenta.
+  // El boton de respaldo es un enlace de verdad, no un guion: pulsarlo es un
+  // gesto tuyo y vale siempre. Al ser un enlace no puede provocar un
+  // lanzamiento doble por su cuenta.
   m.href = d.destino;
   m.hidden = false;
 
-  var lanzado = false, cerrado = false, cuando = 0;
+  var lanzado = false, cerrado = false, cuando = 0, ultima_marca = null;
 
   // El salto. Va aqui, al cargar, para heredar el clic con el que has
   // llegado: Chrome exige un gesto reciente y lo lleva en una bandera global
   // que tu clic acaba de poner en alto. UNA sola vez.
-  if (!lanzado) {
-    lanzado = true;
-    cuando = Date.now();
-    try { location.href = d.destino; } catch (e) { /* queda el boton */ }
+  lanzado = true;
+  cuando = Date.now();
+  try {
+    location.href = d.destino;
+  } catch (err) {
+    apunta("el navegador no aceptó el enlace; usa el botón");
   }
 
-  addEventListener("visibilitychange", function () {
-    if (!debe_cerrar(document.hidden, lanzado, cerrado, Date.now() - cuando)) {
-      return;
-    }
+  function al_cambiar_visibilidad(ev) {
+    var marca = ev && typeof ev.timeStamp === "number" ? ev.timeStamp : Date.now();
+    if (repetido(marca, ultima_marca)) { return; }
+    ultima_marca = marca;
+
+    var desde = Date.now() - cuando;
+    apunta((document.hidden ? "pasó a oculta" : "volvió a verse") +
+           " a los " + desde + " ms");
+
+    if (!debe_cerrar(document.hidden, lanzado, cerrado, desde)) { return; }
     cerrado = true;
-    // El texto se cambia ANTES de intentar cerrar. Si Chrome permite el
-    // cierre nadie lo lee, y si lo rechaza la pagina ya dice algo verdadero
-    // en vez de inventarse un diagnostico.
-    t.textContent = "Maestro AI Studio está abierto";
-    s.innerHTML = "Ya puedes cerrar esta pestaña.";
-    try { window.close(); } catch (e) { /* se queda con el mensaje de arriba */ }
-  });
+    // El texto y el rotulo se cambian ANTES de intentar cerrar. Si Chrome
+    // permite el cierre nadie lo lee; si lo rechaza, la pagina ya dice algo
+    // verdadero en vez de inventarse un diagnostico.
+    estado("Maestro AI Studio está abierto",
+           "Ya puedes cerrar esta pestaña.");
+    x.hidden = false;
+    try {
+      window.close();
+    } catch (err) {
+      apunta("el navegador no dejó cerrar la pestaña");
+    }
+  }
+
+  document.addEventListener("visibilitychange", al_cambiar_visibilidad);
+  addEventListener("visibilitychange", al_cambiar_visibilidad);
 }
+
+// Cerrar a mano. Un clic lleva activacion del usuario, que es el caso en el
+// que el cierre esta permitido con mas holgura; y si aun asi no se permite,
+// se dice y se queda.
+x.addEventListener("click", function () {
+  try {
+    window.close();
+  } catch (err) { /* abajo */ }
+  apunta("si esta pestaña sigue aquí, ciérrala con Ctrl+W");
+});
 </script>
 </body>
 </html>
