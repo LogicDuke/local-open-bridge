@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<title>Abrir en el estudio local</title>
+<!--
+  ============================================================================
+  PAGINA PUENTE. Candidata a publicarse. 100 lineas, sin dependencias.
+
+  Lo UNICO que hace: leer un vale del FRAGMENTO de la direccion y pedirle al
+  navegador que abra el programa local registrado para ese tipo de enlace.
+
+  Por que el fragmento (#) y no la consulta (?): el navegador NUNCA envia el
+  fragmento al servidor. El alojamiento no ve el vale, no lo registra y no
+  puede registrarlo. Si el vale llegara en la consulta si lo veria, asi que
+  esta pagina RECHAZA cualquier consulta en vez de aceptarla por si cuela.
+
+  Lo que esta pagina no tiene y no puede tener: ni identificadores de
+  elementos, ni titulos, ni rutas de ficheros, ni sesion, ni puerto, ni
+  nombres del proyecto. No carga nada de fuera -- ni tipografias, ni guiones,
+  ni analitica -- asi que no hay forma de que informe a nadie de nada.
+
+  Lo que un vale puede hacer en el ordenador de su duenyo: decidir QUE ficha
+  se abre. No aprueba, no rechaza, no genera y no enciende la tarjeta
+  grafica. En cualquier otro ordenador no hace nada: no hay programa
+  registrado y no hay cuaderno donde buscarlo.
+  ============================================================================
+-->
+<style>
+ :root{--f:#14161a;--c:#e8e8ea;--t:#2c2f36;--p:#191c21;--a:#2f6feb;--g:#9aa0a8}
+ @media (prefers-color-scheme: light){
+   :root{--f:#f7f7f8;--c:#17181b;--t:#dcdde0;--p:#fff;--a:#1a56d6;--g:#5d636b}}
+ html,body{margin:0;background:var(--f);color:var(--c)}
+ body{font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      display:grid;place-items:center;min-height:100vh;padding:16px}
+ main{max-width:30em;width:100%;text-align:center}
+ h1{font-size:1.25em;margin:0 0 .2em}
+ p{margin:.5em 0}
+ .g{color:var(--g);font-size:.9em}
+ button,a.b{display:inline-block;margin-top:1em;background:var(--a);color:#fff;
+      border:0;border-radius:8px;padding:.7em 1.3em;font:inherit;
+      text-decoration:none;cursor:pointer}
+ #v{border:1px solid var(--t);background:var(--p);border-radius:10px;
+      padding:.9em;margin-top:1.4em;text-align:left;font-size:.92em}
+ b.ok{color:#51cf66} b.no{color:#ff8787}
+ code{background:var(--p);border:1px solid var(--t);padding:.1em .4em;
+      border-radius:4px;font-size:.9em;word-break:break-all}
+</style>
+</head>
+<body>
+<main>
+ <h1 id="t">Abriendo en tu estudio local…</h1>
+ <p class="g" id="s">Si tu navegador pregunta si quieres abrirlo, di que sí.</p>
+ <p><a class="b" id="m" href="#" hidden>Abrirlo ahora</a></p>
+ <div id="v" hidden></div>
+</main>
+<script>
+"use strict";
+// Lista cerrada: esta pagina solo sabe formar UN tipo de enlace.
+var ESQUEMA = "maestro-saoco", ACCION = "aprobar";
+var VALE = /^[0-9a-f]{32}$/;
+
+var t = document.getElementById("t"), s = document.getElementById("s"),
+    m = document.getElementById("m"), v = document.getElementById("v");
+
+function alto(titulo, detalle) {
+  t.textContent = titulo; s.innerHTML = detalle; m.hidden = true;
+}
+
+// 1. El vale NUNCA viaja en la consulta. Si hay consulta, el enlace esta mal
+//    formado y lo decimos en vez de seguir.
+if (location.search) {
+  alto("Ese enlace no está bien formado",
+       "El vale tiene que ir detrás de <code>#</code>, no de <code>?</code>. " +
+       "Detrás de <code>?</code> lo vería el servidor, y no debe verlo nadie.");
+} else {
+  var vale = decodeURIComponent(location.hash.replace(/^#/, "")).trim();
+  if (!VALE.test(vale)) {
+    // 2. Forma estricta. Nada que no sean 32 hexadecimales en minuscula llega
+    //    a construir una direccion.
+    alto("Ese enlace no lleva un vale válido",
+         "Vuelve a pedirlo y usa el nuevo. Un vale son 32 caracteres " +
+         "hexadecimales, y este no lo es.");
+  } else {
+    var destino = ESQUEMA + "://" + ACCION + "/" + vale;
+    m.href = destino; m.hidden = false;
+
+    // 3. El salto. Va aqui, al cargar, para heredar el clic con el que has
+    //    llegado: Chrome exige un gesto reciente y lo lleva en una bandera
+    //    global que tu clic acaba de poner en alto.
+    var movido = false;
+    function fuera() { movido = true; }
+    addEventListener("blur", fuera, {once: true});
+    addEventListener("visibilitychange", fuera, {once: true});
+    addEventListener("pagehide", fuera, {once: true});
+    try { location.href = destino; } catch (e) { /* lo dira el veredicto */ }
+
+    // 4. Veredicto. Solo para esta prueba: distingue «algo pasó» de «Chrome
+    //    lo bloqueó en silencio», que es lo unico que no se ve desde fuera.
+    setTimeout(function () {
+      v.hidden = false;
+      if (movido || !document.hasFocus() || document.hidden) {
+        v.innerHTML = "<b class='ok'>El salto NO fue bloqueado.</b><br>" +
+          "El navegador ha dejado salir el enlace: o se abrió el estudio, o " +
+          "salió la ventana de confirmación. Un solo clic basta.";
+      } else {
+        v.innerHTML = "<b class='no'>Parece bloqueado.</b><br>" +
+          "Nada tomó el foco. Abre la consola con <b>F12</b>: si dice " +
+          "<i>«Not allowed to launch … because a user gesture is required»</i>, " +
+          "el navegador no hereda el clic y esta vía no da un solo clic. " +
+          "Puedes usar el botón de arriba, que sí es un gesto tuyo.";
+      }
+    }, 1500);
+  }
+}
+</script>
+</body>
+</html>
