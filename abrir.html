@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex,nofollow">
-<title>Abrir en el estudio local</title>
+<title>Abriendo Maestro AI Studio</title>
 <!--
   ============================================================================
   PAGINA PUENTE. Sin dependencias y sin estado.
 
-  Lo UNICO que hace: leer un vale del FRAGMENTO de la direccion y pedirle al
-  navegador que abra el programa local registrado para ese tipo de enlace.
+  Lo UNICO que hace: leer un vale del FRAGMENTO de la direccion, pedirle al
+  navegador que abra el programa local registrado para ese tipo de enlace, y
+  despues quitarse de en medio.
 
   Por que el fragmento (#) y no la consulta (?): el navegador NUNCA envia el
   fragmento al servidor. El alojamiento no ve el vale, no lo registra y no
@@ -32,6 +33,29 @@
   se abre. No aprueba, no rechaza, no genera y no enciende la tarjeta
   grafica. En cualquier otro ordenador no hace nada: no hay programa
   registrado y no hay cuaderno donde buscarlo.
+
+  ---------------------------------------------------------------------------
+  SOBRE EL CIERRE AUTOMATICO, que es lo que cambia en esta version.
+
+  La version anterior dictaba un veredicto a los 1500 ms -- «parece
+  bloqueado» -- y se equivocaba casi siempre. Medido el 30 de octubre de 2026
+  en el ordenador del duenyo: el lanzador tarda 1820, 3647 y 4127 ms solo en
+  importar su paquete, y a eso le suma todavia 0,4 s antes de abrir el
+  navegador. El umbral estaba por debajo de la medicion mas rapida, asi que
+  el veredicto se dictaba mientras el lanzamiento seguia en vuelo. Ese
+  diagnostico era un instrumento de medida para una prueba concreta y aqui no
+  tenia nada que hacer: se ha ido entero.
+
+  En su lugar, el cierre se dispara por VISIBILIDAD y no por tiempo. La razon
+  es exacta: la ventana con la que Chrome pregunta si quieres abrir la
+  aplicacion cambia el FOCO pero NO la visibilidad de la pagina. Asi que
+  mientras tu decides, `document.hidden` sigue siendo false y esta pagina no
+  se cierra -- no porque haya esperado lo suficiente, sino porque no se ha
+  cumplido la condicion. Cuando la ficha de Maestro aparece y toma el primer
+  plano, esta pagina pasa a oculta, y es justo ahi cuando sobra.
+
+  No hay ningun temporizador en todo el fichero. El arreglo de un fallo
+  causado por un temporizador no se hace con otro temporizador.
   ============================================================================
 -->
 <style>
@@ -45,22 +69,18 @@
  h1{font-size:1.25em;margin:0 0 .2em}
  p{margin:.5em 0}
  .g{color:var(--g);font-size:.9em}
- button,a.b{display:inline-block;margin-top:1em;background:var(--a);color:#fff;
+ a.b{display:inline-block;margin-top:1em;background:var(--a);color:#fff;
       border:0;border-radius:8px;padding:.7em 1.3em;font:inherit;
       text-decoration:none;cursor:pointer}
- #v{border:1px solid var(--t);background:var(--p);border-radius:10px;
-      padding:.9em;margin-top:1.4em;text-align:left;font-size:.92em}
- b.ok{color:#51cf66} b.no{color:#ff8787}
  code{background:var(--p);border:1px solid var(--t);padding:.1em .4em;
       border-radius:4px;font-size:.9em;word-break:break-all}
 </style>
 </head>
 <body>
 <main>
- <h1 id="t">Abriendo en tu estudio local&hellip;</h1>
+ <h1 id="t">Abriendo Maestro AI Studio&hellip;</h1>
  <p class="g" id="s">Si tu navegador pregunta si quieres abrirlo, di que s&iacute;.</p>
  <p><a class="b" id="m" href="#" hidden>Abrirlo ahora</a></p>
- <div id="v" hidden></div>
 </main>
 <script>
 "use strict";
@@ -85,10 +105,10 @@ var CONSULTAS = ["", "?utm_source=chatgpt.com"];
 function decidir(busqueda, fragmento) {
   if (CONSULTAS.indexOf(String(busqueda)) === -1) {
     return {ok: false, motivo: "consulta",
-      titulo: "Ese enlace no est\u00e1 bien formado",
-      detalle: "Lleva algo detr\u00e1s de <code>?</code> que esta p\u00e1gina no " +
-               "admite. El vale va detr\u00e1s de <code>#</code>: detr\u00e1s de " +
-               "<code>?</code> lo ver\u00eda el servidor, y no debe verlo nadie."};
+      titulo: "Ese enlace no está bien formado",
+      detalle: "Lleva algo detrás de <code>?</code> que esta página no " +
+               "admite. El vale va detrás de <code>#</code>: detrás de " +
+               "<code>?</code> lo vería el servidor, y no debe verlo nadie."};
   }
   var vale;
   try {
@@ -98,50 +118,82 @@ function decidir(busqueda, fragmento) {
   }
   if (!VALE.test(vale)) {
     return {ok: false, motivo: "vale",
-      titulo: "Ese enlace no lleva un vale v\u00e1lido",
+      titulo: "Ese enlace no lleva un vale válido",
       detalle: "Vuelve a pedirlo y usa el nuevo. Un vale son 32 caracteres " +
-               "hexadecimales en min\u00fascula, y este no lo es."};
+               "hexadecimales en minúscula, y este no lo es."};
   }
   return {ok: true, motivo: "bien", destino: ESQUEMA + "://" + ACCION + "/" + vale};
 }
 /* ---8<--- DECISION: FIN ------------------------------------------------- */
 
+/* ---8<--- CIERRE: INICIO --- tambien se prueba palabra por palabra ------ */
+// Ni demasiado pronto ni para siempre.
+//
+// MINIMO: si la pagina se oculta en el primer instante no es porque Maestro
+// haya abierto nada -- el lanzador tarda segundos -- sino porque has cambiado
+// de pestanya a mano. Cerrar ahi podria llevarse por delante un lanzamiento
+// todavia en vuelo, asi que no se cierra; se cerrara la siguiente vez que
+// esta pagina se oculte.
+//
+// MAXIMO: pasado un rato, esta pestanya ya no es «la que acaba de abrir
+// Maestro» sino una pestanya mas que tienes ahi. Que se cierre sola media
+// hora despues, cuando mires otra cosa, seria desconcertante.
+var MINIMO = 1500, MAXIMO = 120000;
+
+function debe_cerrar(oculto, lanzado, cerrado, desde_el_lanzamiento) {
+  // Ojo con el orden de las condiciones: `oculto` es la primera a proposito.
+  // La ventana con la que Chrome pregunta si abrir la aplicacion cambia el
+  // FOCO pero no la VISIBILIDAD, asi que mientras esa ventana esta delante
+  // esto devuelve false y la pestanya no se cierra. Eso no es una espera: es
+  // que la condicion no se cumple.
+  if (!oculto) { return false; }
+  if (!lanzado) { return false; }          // nada que acompanyar todavia
+  if (cerrado) { return false; }           // una sola vez, nunca en bucle
+  if (desde_el_lanzamiento < MINIMO) { return false; }
+  if (desde_el_lanzamiento > MAXIMO) { return false; }
+  return true;
+}
+/* ---8<--- CIERRE: FIN --------------------------------------------------- */
+
 var t = document.getElementById("t"), s = document.getElementById("s"),
-    m = document.getElementById("m"), v = document.getElementById("v");
+    m = document.getElementById("m");
 
 var d = decidir(location.search, location.hash);
 
 if (!d.ok) {
-  t.textContent = d.titulo; s.innerHTML = d.detalle; m.hidden = true;
+  t.textContent = d.titulo;
+  s.innerHTML = d.detalle;
 } else {
-  m.href = d.destino; m.hidden = false;
+  // El boton de respaldo es un enlace de verdad, no un guión: pulsarlo es un
+  // gesto tuyo y vale siempre, tambien si el salto automatico se quedo corto.
+  // Al ser un enlace y no JavaScript, no puede provocar un lanzamiento doble
+  // por su cuenta.
+  m.href = d.destino;
+  m.hidden = false;
+
+  var lanzado = false, cerrado = false, cuando = 0;
 
   // El salto. Va aqui, al cargar, para heredar el clic con el que has
   // llegado: Chrome exige un gesto reciente y lo lleva en una bandera global
-  // que tu clic acaba de poner en alto.
-  var movido = false;
-  function fuera() { movido = true; }
-  addEventListener("blur", fuera, {once: true});
-  addEventListener("visibilitychange", fuera, {once: true});
-  addEventListener("pagehide", fuera, {once: true});
-  try { location.href = d.destino; } catch (e) { /* lo dira el veredicto */ }
+  // que tu clic acaba de poner en alto. UNA sola vez.
+  if (!lanzado) {
+    lanzado = true;
+    cuando = Date.now();
+    try { location.href = d.destino; } catch (e) { /* queda el boton */ }
+  }
 
-  // Veredicto. Distingue «algo paso» de «el navegador lo bloqueo en
-  // silencio», que es lo unico que no se ve desde fuera.
-  setTimeout(function () {
-    v.hidden = false;
-    if (movido || !document.hasFocus() || document.hidden) {
-      v.innerHTML = "<b class='ok'>El salto NO fue bloqueado.</b><br>" +
-        "El navegador ha dejado salir el enlace: o se abri\u00f3 el estudio, o " +
-        "sali\u00f3 la ventana de confirmaci\u00f3n. Un solo clic basta.";
-    } else {
-      v.innerHTML = "<b class='no'>Parece bloqueado.</b><br>" +
-        "Nada tom\u00f3 el foco. Abre la consola con <b>F12</b>: si dice " +
-        "<i>\u00abNot allowed to launch \u2026 because a user gesture is " +
-        "required\u00bb</i>, el navegador no hereda el clic. Puedes usar el " +
-        "bot\u00f3n de arriba, que s\u00ed es un gesto tuyo.";
+  addEventListener("visibilitychange", function () {
+    if (!debe_cerrar(document.hidden, lanzado, cerrado, Date.now() - cuando)) {
+      return;
     }
-  }, 1500);
+    cerrado = true;
+    // El texto se cambia ANTES de intentar cerrar. Si Chrome permite el
+    // cierre nadie lo lee, y si lo rechaza la pagina ya dice algo verdadero
+    // en vez de inventarse un diagnostico.
+    t.textContent = "Maestro AI Studio está abierto";
+    s.innerHTML = "Ya puedes cerrar esta pestaña.";
+    try { window.close(); } catch (e) { /* se queda con el mensaje de arriba */ }
+  });
 }
 </script>
 </body>
