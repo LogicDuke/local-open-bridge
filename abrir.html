@@ -8,15 +8,20 @@
 <title>Abrir en el estudio local</title>
 <!--
   ============================================================================
-  PAGINA PUENTE. Candidata a publicarse. 100 lineas, sin dependencias.
+  PAGINA PUENTE. Sin dependencias y sin estado.
 
   Lo UNICO que hace: leer un vale del FRAGMENTO de la direccion y pedirle al
   navegador que abra el programa local registrado para ese tipo de enlace.
 
   Por que el fragmento (#) y no la consulta (?): el navegador NUNCA envia el
   fragmento al servidor. El alojamiento no ve el vale, no lo registra y no
-  puede registrarlo. Si el vale llegara en la consulta si lo veria, asi que
-  esta pagina RECHAZA cualquier consulta en vez de aceptarla por si cuela.
+  puede registrarlo.
+
+  La consulta se compara ENTERA contra una lista cerrada de cadenas exactas
+  (ver CONSULTAS). No se parsea y no se leen parametros. De ahi sale la
+  garantia que importa: ninguna de las cadenas admitidas lleva un vale, asi
+  que un vale sigue sin poder viajar en la consulta ni por descuido ni a
+  proposito.
 
   Lo que esta pagina no tiene y no puede tener: ni identificadores de
   elementos, ni titulos, ni rutas de ficheros, ni sesion, ni puerto, ni
@@ -52,69 +57,91 @@
 </head>
 <body>
 <main>
- <h1 id="t">Abriendo en tu estudio local…</h1>
- <p class="g" id="s">Si tu navegador pregunta si quieres abrirlo, di que sí.</p>
+ <h1 id="t">Abriendo en tu estudio local&hellip;</h1>
+ <p class="g" id="s">Si tu navegador pregunta si quieres abrirlo, di que s&iacute;.</p>
  <p><a class="b" id="m" href="#" hidden>Abrirlo ahora</a></p>
  <div id="v" hidden></div>
 </main>
 <script>
 "use strict";
+/* ---8<--- DECISION: INICIO --- lo que se prueba, palabra por palabra ----- */
 // Lista cerrada: esta pagina solo sabe formar UN tipo de enlace.
 var ESQUEMA = "maestro-saoco", ACCION = "aprobar";
+
+// Un vale: 32 hexadecimales en minuscula. Ni mas, ni menos, ni mayusculas.
 var VALE = /^[0-9a-f]{32}$/;
+
+// Consultas admitidas, comparadas ENTERAS y letra por letra. No se parsea la
+// consulta y no se leen parametros: se compara la cadena completa. Por eso un
+// duplicado (`utm_source=chatgpt.com&utm_source=chatgpt.com`), un parametro de
+// propina, otro valor u otra grafia no son «lo mismo con algo mas»: son otra
+// cadena, y no estan en la lista.
+//
+// `?utm_source=chatgpt.com` esta aqui porque ChatGPT lo anyade al abrir el
+// enlace. Si manyana anyade otra etiqueta, se escribe otra linea en esta
+// lista y no hay nada mas que tocar.
+var CONSULTAS = ["", "?utm_source=chatgpt.com"];
+
+function decidir(busqueda, fragmento) {
+  if (CONSULTAS.indexOf(String(busqueda)) === -1) {
+    return {ok: false, motivo: "consulta",
+      titulo: "Ese enlace no est\u00e1 bien formado",
+      detalle: "Lleva algo detr\u00e1s de <code>?</code> que esta p\u00e1gina no " +
+               "admite. El vale va detr\u00e1s de <code>#</code>: detr\u00e1s de " +
+               "<code>?</code> lo ver\u00eda el servidor, y no debe verlo nadie."};
+  }
+  var vale;
+  try {
+    vale = decodeURIComponent(String(fragmento).replace(/^#/, "")).trim();
+  } catch (e) {
+    vale = "";            // un %XX mal escrito es un vale invalido, no un fallo
+  }
+  if (!VALE.test(vale)) {
+    return {ok: false, motivo: "vale",
+      titulo: "Ese enlace no lleva un vale v\u00e1lido",
+      detalle: "Vuelve a pedirlo y usa el nuevo. Un vale son 32 caracteres " +
+               "hexadecimales en min\u00fascula, y este no lo es."};
+  }
+  return {ok: true, motivo: "bien", destino: ESQUEMA + "://" + ACCION + "/" + vale};
+}
+/* ---8<--- DECISION: FIN ------------------------------------------------- */
 
 var t = document.getElementById("t"), s = document.getElementById("s"),
     m = document.getElementById("m"), v = document.getElementById("v");
 
-function alto(titulo, detalle) {
-  t.textContent = titulo; s.innerHTML = detalle; m.hidden = true;
-}
+var d = decidir(location.search, location.hash);
 
-// 1. El vale NUNCA viaja en la consulta. Si hay consulta, el enlace esta mal
-//    formado y lo decimos en vez de seguir.
-if (location.search) {
-  alto("Ese enlace no está bien formado",
-       "El vale tiene que ir detrás de <code>#</code>, no de <code>?</code>. " +
-       "Detrás de <code>?</code> lo vería el servidor, y no debe verlo nadie.");
+if (!d.ok) {
+  t.textContent = d.titulo; s.innerHTML = d.detalle; m.hidden = true;
 } else {
-  var vale = decodeURIComponent(location.hash.replace(/^#/, "")).trim();
-  if (!VALE.test(vale)) {
-    // 2. Forma estricta. Nada que no sean 32 hexadecimales en minuscula llega
-    //    a construir una direccion.
-    alto("Ese enlace no lleva un vale válido",
-         "Vuelve a pedirlo y usa el nuevo. Un vale son 32 caracteres " +
-         "hexadecimales, y este no lo es.");
-  } else {
-    var destino = ESQUEMA + "://" + ACCION + "/" + vale;
-    m.href = destino; m.hidden = false;
+  m.href = d.destino; m.hidden = false;
 
-    // 3. El salto. Va aqui, al cargar, para heredar el clic con el que has
-    //    llegado: Chrome exige un gesto reciente y lo lleva en una bandera
-    //    global que tu clic acaba de poner en alto.
-    var movido = false;
-    function fuera() { movido = true; }
-    addEventListener("blur", fuera, {once: true});
-    addEventListener("visibilitychange", fuera, {once: true});
-    addEventListener("pagehide", fuera, {once: true});
-    try { location.href = destino; } catch (e) { /* lo dira el veredicto */ }
+  // El salto. Va aqui, al cargar, para heredar el clic con el que has
+  // llegado: Chrome exige un gesto reciente y lo lleva en una bandera global
+  // que tu clic acaba de poner en alto.
+  var movido = false;
+  function fuera() { movido = true; }
+  addEventListener("blur", fuera, {once: true});
+  addEventListener("visibilitychange", fuera, {once: true});
+  addEventListener("pagehide", fuera, {once: true});
+  try { location.href = d.destino; } catch (e) { /* lo dira el veredicto */ }
 
-    // 4. Veredicto. Solo para esta prueba: distingue «algo pasó» de «Chrome
-    //    lo bloqueó en silencio», que es lo unico que no se ve desde fuera.
-    setTimeout(function () {
-      v.hidden = false;
-      if (movido || !document.hasFocus() || document.hidden) {
-        v.innerHTML = "<b class='ok'>El salto NO fue bloqueado.</b><br>" +
-          "El navegador ha dejado salir el enlace: o se abrió el estudio, o " +
-          "salió la ventana de confirmación. Un solo clic basta.";
-      } else {
-        v.innerHTML = "<b class='no'>Parece bloqueado.</b><br>" +
-          "Nada tomó el foco. Abre la consola con <b>F12</b>: si dice " +
-          "<i>«Not allowed to launch … because a user gesture is required»</i>, " +
-          "el navegador no hereda el clic y esta vía no da un solo clic. " +
-          "Puedes usar el botón de arriba, que sí es un gesto tuyo.";
-      }
-    }, 1500);
-  }
+  // Veredicto. Distingue «algo paso» de «el navegador lo bloqueo en
+  // silencio», que es lo unico que no se ve desde fuera.
+  setTimeout(function () {
+    v.hidden = false;
+    if (movido || !document.hasFocus() || document.hidden) {
+      v.innerHTML = "<b class='ok'>El salto NO fue bloqueado.</b><br>" +
+        "El navegador ha dejado salir el enlace: o se abri\u00f3 el estudio, o " +
+        "sali\u00f3 la ventana de confirmaci\u00f3n. Un solo clic basta.";
+    } else {
+      v.innerHTML = "<b class='no'>Parece bloqueado.</b><br>" +
+        "Nada tom\u00f3 el foco. Abre la consola con <b>F12</b>: si dice " +
+        "<i>\u00abNot allowed to launch \u2026 because a user gesture is " +
+        "required\u00bb</i>, el navegador no hereda el clic. Puedes usar el " +
+        "bot\u00f3n de arriba, que s\u00ed es un gesto tuyo.";
+    }
+  }, 1500);
 }
 </script>
 </body>
